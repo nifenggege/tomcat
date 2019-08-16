@@ -58,14 +58,15 @@ public class Acceptor<U> implements Runnable {
     @Override
     public void run() {
 
+
         int errorDelay = 0;
 
         // Loop until we receive a shutdown command
-        while (endpoint.isRunning()) {
+        while (endpoint.isRunning()) { //endpoint 处于工作状态
 
             // Loop if endpoint is paused
-            while (endpoint.isPaused() && endpoint.isRunning()) {
-                state = AcceptorState.PAUSED;
+            while (endpoint.isPaused() && endpoint.isRunning()) { //endpoint 暂停
+                state = AcceptorState.PAUSED;  //状态修改为paused， 循环等待endpoint可工作
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
@@ -76,11 +77,11 @@ public class Acceptor<U> implements Runnable {
             if (!endpoint.isRunning()) {
                 break;
             }
-            state = AcceptorState.RUNNING;
+            state = AcceptorState.RUNNING; //状态修改为running
 
             try {
                 //if we have reached max connections, wait
-                endpoint.countUpOrAwaitConnection();
+                endpoint.countUpOrAwaitConnection(); //连接数控制
 
                 // Endpoint might have been paused while waiting for latch
                 // If that is the case, don't accept new connections
