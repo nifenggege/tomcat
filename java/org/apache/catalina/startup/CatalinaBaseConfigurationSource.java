@@ -32,9 +32,9 @@ public class CatalinaBaseConfigurationSource implements ConfigurationSource {
 
     protected static final StringManager sm = StringManager.getManager(Constants.Package);
 
-    private final String serverXmlPath;
-    private final File catalinaBaseFile;
-    private final URI catalinaBaseUri;
+    private final String serverXmlPath; //conf/server.xml
+    private final File catalinaBaseFile; //tomcat 目录
+    private final URI catalinaBaseUri; //file:/D:/....
 
     public CatalinaBaseConfigurationSource(File catalinaBaseFile, String serverXmlPath) {
         this.catalinaBaseFile = catalinaBaseFile;

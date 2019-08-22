@@ -1164,7 +1164,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
 
         @Override
         public int read(boolean block, ByteBuffer to) throws IOException {
-            int nRead = populateReadBuffer(to);
+            int nRead = populateReadBuffer(to);  //从socketBuffer中读数据，1.全部都读取出来，2. to中已装满
             if (nRead > 0) {
                 return nRead;
                 /*
@@ -1176,6 +1176,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                  */
             }
 
+            //个人理解就是，如果socketBuffer中获取不到数据，那么久直接去通过socket获取，先从socket扔到socketBuffer中
             // The socket read buffer capacity is socket.appReadBufSize
             int limit = socketBufferHandler.getReadBuffer().capacity();
             if (to.remaining() >= limit) {

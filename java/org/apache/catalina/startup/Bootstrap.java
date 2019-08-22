@@ -64,10 +64,10 @@ public final class Bootstrap {
 
     static {
         // Will always be non-null
-        String userDir = System.getProperty("user.dir");
+        String userDir = System.getProperty("user.dir"); //项目目录
 
         // Home first
-        String home = System.getProperty(Globals.CATALINA_HOME_PROP);
+        String home = System.getProperty(Globals.CATALINA_HOME_PROP); //catalina.home
         File homeFile = null;
 
         if (home != null) {
@@ -144,7 +144,7 @@ public final class Bootstrap {
 
     private void initClassLoaders() {
         try {
-            commonLoader = createClassLoader("common", null);
+            commonLoader = createClassLoader("common", null); //URLClassLoader
             if( commonLoader == null ) {
                 // no config file, default to this loader - we might be in a 'single' env.
                 commonLoader=this.getClass().getClassLoader();
@@ -159,6 +159,15 @@ public final class Bootstrap {
     }
 
 
+    /**
+     * 从配置文件中获取name.loader的值
+     * 按照逗号分隔，每一项都转化为Repository
+     * 创建classloader
+     * @param name
+     * @param parent
+     * @return
+     * @throws Exception
+     */
     private ClassLoader createClassLoader(String name, ClassLoader parent)
         throws Exception {
 
@@ -251,7 +260,7 @@ public final class Bootstrap {
      */
     public void init() throws Exception {
 
-        initClassLoaders();
+        initClassLoaders();  //构造类加载器
 
         Thread.currentThread().setContextClassLoader(catalinaLoader);
 

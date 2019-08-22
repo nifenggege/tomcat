@@ -478,7 +478,7 @@ public abstract class SocketWrapperBase<E> {
     protected void writeBlocking(byte[] buf, int off, int len) throws IOException {
         socketBufferHandler.configureWriteBufferForWrite();
         int thisTime = transfer(buf, off, len, socketBufferHandler.getWriteBuffer());
-        while (socketBufferHandler.getWriteBuffer().remaining() == 0) {
+        while (socketBufferHandler.getWriteBuffer().remaining() == 0) { //最后一部分岂不是肯定不会满？最后一部分丢失了？
             len = len - thisTime;
             off = off + thisTime;
             doWrite(true);

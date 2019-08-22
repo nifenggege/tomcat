@@ -84,7 +84,7 @@ public class NioBlockingSelector {
      * @throws SocketTimeoutException if the write times out
      * @throws IOException if an IO Exception occurs in the underlying socket logic
      */
-    public int write(ByteBuffer buf, NioChannel socket, long writeTimeout)
+    public int write(ByteBuffer buf, NioChannel socket, long writeTimeout) //返回write的数据量
             throws IOException {
         SelectionKey key = socket.getIOChannel().keyFor(socket.getPoller().getSelector());
         if (key == null) {
@@ -100,39 +100,46 @@ public class NioBlockingSelector {
         int keycount = 1; //assume we can write
         long time = System.currentTimeMillis(); //start the timeout timer
         try {
-            while ( (!timedout) && buf.hasRemaining()) {
+            while ( (!timedout) && buf.hasRemaining()) { //还有可写内容，且没有写超时
                 if (keycount > 0) { //only write if we were registered for a write
-                    int cnt = socket.write(buf); //write the data
+                    int cnt = socket.write(buf); //往socket中写数据，如果返回-1表示socket关闭，0表示socket目前不可写
                     if (cnt == -1)
                         throw new EOFException();
-                    written += cnt;
+                    written += cnt; //已经写的字节数
                     if (cnt > 0) {
                         time = System.currentTimeMillis(); //reset our timeout timer
                         continue; //we successfully wrote, try again without a selector
                     }
                 }
+
+                //到这里相当于，目前socket不可写，但是仍然存在需要写的数据
                 try {
                     if ( att.getWriteLatch()==null || att.getWriteLatch().getCount()==0) att.startWriteLatch(1);
+                    //往自己的poller中添加任务，等待执行，添加写任务
                     poller.add(att,SelectionKey.OP_WRITE,reference);
                     att.awaitWriteLatch(AbstractEndpoint.toTimeout(writeTimeout),TimeUnit.MILLISECONDS);
+                    //等待执行完成，如果还没有执行完成，那么就应该是超时了
                 } catch (InterruptedException ignore) {
                     // Ignore
                 }
                 if ( att.getWriteLatch()!=null && att.getWriteLatch().getCount()> 0) {
                     //we got interrupted, but we haven't received notification from the poller.
+                    //说明超时了已经
                     keycount = 0;
                 }else {
                     //latch countdown has happened
+                    //说明处理完了，这个地方writeLatch应该为0
                     keycount = 1;
                     att.resetWriteLatch();
                 }
 
-                if (writeTimeout > 0 && (keycount == 0))
+                if (writeTimeout > 0 && (keycount == 0))  //到这里讲道理就超时了，应为上面是等待了writeTimeout时间
                     timedout = (System.currentTimeMillis() - time) >= writeTimeout;
             } //while
             if (timedout)
                 throw new SocketTimeoutException();
         } finally {
+            //将OP_WRITE 从poller中移除
             poller.remove(att,SelectionKey.OP_WRITE);
             if (timedout && reference.key!=null) {
                 poller.cancelKey(reference.key);
@@ -173,10 +180,12 @@ public class NioBlockingSelector {
             while(!timedout) {
                 if (keycount > 0) { //only read if we were registered for a read
                     read = socket.read(buf);
-                    if (read != 0) {
+                    if (read != 0) {//不为0存在两种情况，>0读取到内容，-1连接关闭
                         break;
                     }
                 }
+
+                //keycount<=0 或者read=0
                 try {
                     if ( att.getReadLatch()==null || att.getReadLatch().getCount()==0) att.startReadLatch(1);
                     poller.add(att,SelectionKey.OP_READ, reference);
@@ -186,9 +195,11 @@ public class NioBlockingSelector {
                 }
                 if ( att.getReadLatch()!=null && att.getReadLatch().getCount()> 0) {
                     //we got interrupted, but we haven't received notification from the poller.
+                    //还没有读取到内容，已经超时
                     keycount = 0;
                 }else {
                     //latch countdown has happened
+                    //读取到内容
                     keycount = 1;
                     att.resetReadLatch();
                 }

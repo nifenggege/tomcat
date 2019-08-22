@@ -376,9 +376,10 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
                 if (request.getStartTime() < 0) {
                     request.setStartTime(System.currentTimeMillis());
                 }
-                chr = byteBuffer.get();
-            } while ((chr == Constants.CR) || (chr == Constants.LF));
-            byteBuffer.position(byteBuffer.position() - 1);
+                chr = byteBuffer.get(); //获取positon位置的byte，postion++
+            } while ((chr == Constants.CR) || (chr == Constants.LF)); //如果是\r 或者是\n就继续，因为header还没有完
+
+            byteBuffer.position(byteBuffer.position() - 1); //get的补偿回来
 
             parsingRequestLineStart = byteBuffer.position();
             parsingRequestLinePhase = 2;
@@ -396,6 +397,8 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             while (!space) {
                 // Read new bytes if needed
                 if (byteBuffer.position() >= byteBuffer.limit()) {
+                    //为什么position>=limit ，实际不存在，只存在position=limit，说明byteBuffer中没有数据
+                    //读模式：无内容可读，写模式：不可写
                     if (!fill(false)) // request line parsing
                         return false;
                 }
@@ -686,6 +689,11 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     }
 
 
+    /**
+     * 根据socket中buffer的大小，capacity 扩充当前byteBuffer的容量
+     * 但是headerBufferSize是干啥的，还没有看出来
+     * @param socketWrapper
+     */
     void init(SocketWrapperBase<?> socketWrapper) {
 
         wrapper = socketWrapper;
@@ -711,8 +719,8 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      */
     private boolean fill(boolean block) throws IOException {
 
-        if (parsingHeader) {
-            if (byteBuffer.limit() >= headerBufferSize) {
+        if (parsingHeader) { //解析请求头
+            if (byteBuffer.limit() >= headerBufferSize) { //headerBufferSize是在什么地方赋值的？
                 if (parsingRequestLine) {
                     // Avoid unknown protocol triggering an additional error
                     request.protocol().setString(Constants.HTTP_11);
@@ -729,7 +737,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
         }
         byteBuffer.limit(byteBuffer.capacity());
         int nRead = wrapper.read(block, byteBuffer);
-        byteBuffer.limit(byteBuffer.position()).reset();
+        byteBuffer.limit(byteBuffer.position()).reset(); //postion~limit是刚刚读到的数据
         if (nRead > 0) {
             return true;
         } else if (nRead == -1) {

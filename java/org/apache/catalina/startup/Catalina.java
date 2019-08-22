@@ -546,10 +546,10 @@ public class Catalina {
 
         long t1 = System.nanoTime();
 
-        initDirs();
+        initDirs(); //java.io.tmpdir 该目录必须存在
 
         // Before digester - it may be needed
-        initNaming();
+        initNaming(); //设置与naming相关的环境变量
 
         // Set configuration source
         ConfigFileLoader.setSource(new CatalinaBaseConfigurationSource(Bootstrap.getCatalinaBaseFile(), getConfigFile()));
