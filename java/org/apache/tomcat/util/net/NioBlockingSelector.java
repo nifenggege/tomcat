@@ -42,20 +42,19 @@ public class NioBlockingSelector {
 
     private static final Log log = LogFactory.getLog(NioBlockingSelector.class);
     protected static final StringManager sm = StringManager.getManager(NioBlockingSelector.class);
+    private static final AtomicInteger threadCounter = new AtomicInteger(); //用于给poller name，代表有多少个poller
 
-    private static final AtomicInteger threadCounter = new AtomicInteger();
-
+    //成员属性
     private final SynchronizedStack<KeyReference> keyReferenceStack =
-            new SynchronizedStack<>();
+            new SynchronizedStack<>(); //对象池
+    protected Selector sharedSelector; //selector
+    protected BlockPoller poller; //blockPoller
 
-    protected Selector sharedSelector;
-
-    protected BlockPoller poller;
     public NioBlockingSelector() {
 
     }
 
-    public void open(Selector selector) {
+    public void open(Selector selector) {//传入selector， 通过该selector构造BlockingPoller， 启动poller线程
         sharedSelector = selector;
         poller = new BlockPoller();
         poller.selector = sharedSelector;
@@ -64,7 +63,7 @@ public class NioBlockingSelector {
         poller.start();
     }
 
-    public void close() {
+    public void close() { //关闭poller
         if (poller!=null) {
             poller.disable();
             poller.interrupt();
@@ -86,11 +85,13 @@ public class NioBlockingSelector {
      */
     public int write(ByteBuffer buf, NioChannel socket, long writeTimeout) //返回write的数据量
             throws IOException {
+
+        //获取socket在之前poller的selector上注册的事件
         SelectionKey key = socket.getIOChannel().keyFor(socket.getPoller().getSelector());
         if (key == null) {
             throw new IOException(sm.getString("nioBlockingSelector.keyNotRegistered"));
         }
-        KeyReference reference = keyReferenceStack.pop();
+        KeyReference reference = keyReferenceStack.pop();  //reference的key是在add任务中赋值的，KeyReference主要是为了释放key
         if (reference == null) {
             reference = new KeyReference();
         }
@@ -112,23 +113,25 @@ public class NioBlockingSelector {
                     }
                 }
 
-                //到这里相当于，目前socket不可写，但是仍然存在需要写的数据
+                //到这里相当于， 目前socket不可写，但是仍然存在需要写的数据
                 try {
-                    if ( att.getWriteLatch()==null || att.getWriteLatch().getCount()==0) att.startWriteLatch(1);
+                    if ( att.getWriteLatch()==null || att.getWriteLatch().getCount()==0) att.startWriteLatch(1); //写控制为1
                     //往自己的poller中添加任务，等待执行，添加写任务
-                    poller.add(att,SelectionKey.OP_WRITE,reference);
+                    poller.add(att,SelectionKey.OP_WRITE,reference);  //Poller 只是判断是否可写的状态，并通过att的writeLatch进行控制
                     att.awaitWriteLatch(AbstractEndpoint.toTimeout(writeTimeout),TimeUnit.MILLISECONDS);
                     //等待执行完成，如果还没有执行完成，那么就应该是超时了
                 } catch (InterruptedException ignore) {
                     // Ignore
                 }
+
+                //两种情况 1，超时， 2.可写
                 if ( att.getWriteLatch()!=null && att.getWriteLatch().getCount()> 0) {
                     //we got interrupted, but we haven't received notification from the poller.
                     //说明超时了已经
                     keycount = 0;
                 }else {
                     //latch countdown has happened
-                    //说明处理完了，这个地方writeLatch应该为0
+                    //说明socket状态可写
                     keycount = 1;
                     att.resetWriteLatch();
                 }
@@ -139,7 +142,7 @@ public class NioBlockingSelector {
             if (timedout)
                 throw new SocketTimeoutException();
         } finally {
-            //将OP_WRITE 从poller中移除
+            //将OP_WRITE 从poller中移除，只是移除当前事件
             poller.remove(att,SelectionKey.OP_WRITE);
             if (timedout && reference.key!=null) {
                 poller.cancelKey(reference.key);
@@ -162,7 +165,7 @@ public class NioBlockingSelector {
      * @throws SocketTimeoutException if the read times out
      * @throws IOException if an IO Exception occurs in the underlying socket logic
      */
-    public int read(ByteBuffer buf, NioChannel socket, long readTimeout) throws IOException {
+    public int read(ByteBuffer buf, NioChannel socket, long readTimeout) throws IOException { //读到内容就会返回
         SelectionKey key = socket.getIOChannel().keyFor(socket.getPoller().getSelector());
         if (key == null) {
             throw new IOException(sm.getString("nioBlockingSelector.keyNotRegistered"));
@@ -185,7 +188,7 @@ public class NioBlockingSelector {
                     }
                 }
 
-                //keycount<=0 或者read=0
+                //read==0
                 try {
                     if ( att.getReadLatch()==null || att.getReadLatch().getCount()==0) att.startReadLatch(1);
                     poller.add(att,SelectionKey.OP_READ, reference);
@@ -199,7 +202,7 @@ public class NioBlockingSelector {
                     keycount = 0;
                 }else {
                     //latch countdown has happened
-                    //读取到内容
+                    //可以读了
                     keycount = 1;
                     att.resetReadLatch();
                 }
@@ -227,7 +230,7 @@ public class NioBlockingSelector {
         public void disable() { run = false; selector.wakeup();}
         protected final AtomicInteger wakeupCounter = new AtomicInteger(0);
 
-        public void cancelKey(final SelectionKey key) {
+        public void cancelKey(final SelectionKey key) { //取消key在selector上的注册
             Runnable r = new RunnableCancel(key);
             events.offer(r);
             wakeup();
@@ -237,7 +240,7 @@ public class NioBlockingSelector {
             if (wakeupCounter.addAndGet(1)==0) selector.wakeup();
         }
 
-        public void cancel(SelectionKey sk, NioSocketWrapper key, int ops){
+        public void cancel(SelectionKey sk, NioSocketWrapper key, int ops){ //取消sk的事件， 清除attach，事件计数-1
             if (sk!=null) {
                 sk.cancel();
                 sk.attach(null);
@@ -252,7 +255,7 @@ public class NioBlockingSelector {
             final SocketChannel ch = nch.getIOChannel();
             if ( ch == null ) return;
 
-            Runnable r = new RunnableAdd(ch, key, ops, ref);
+            Runnable r = new RunnableAdd(ch, key, ops, ref); //将事件注册到Poller的selector上
             events.offer(r);
             wakeup();
         }
@@ -263,7 +266,7 @@ public class NioBlockingSelector {
             final SocketChannel ch = nch.getIOChannel();
             if ( ch == null ) return;
 
-            Runnable r = new RunnableRemove(ch, key, ops);
+            Runnable r = new RunnableRemove(ch, key, ops); //取消指定的事件
             events.offer(r);
             wakeup();
         }
@@ -293,10 +296,10 @@ public class NioBlockingSelector {
         }
 
         @Override
-        public void run() {
+        public void run() {  //执行队列的任务，并控制计数
             while (run) {
                 try {
-                    events();
+                    events(); //执行events队列中的任务
                     int keyCount = 0;
                     try {
                         int i = wakeupCounter.get();
