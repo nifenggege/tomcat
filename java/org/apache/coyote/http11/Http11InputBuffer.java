@@ -857,7 +857,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
             if (headerParsePos == HeaderParsePosition.HEADER_VALUE_START) {
                 // Skipping spaces
-                while (true) {
+                while (true) {//去除空格
                     // Read new bytes if needed
                     if (byteBuffer.position() >= byteBuffer.limit()) {
                         if (!fill(false)) {// parse header
