@@ -1135,8 +1135,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
 
         @Override
         public int read(boolean block, byte[] b, int off, int len) throws IOException {
-            int nRead = populateReadBuffer(b, off, len);
-            if (nRead > 0) {
+            int nRead = populateReadBuffer(b, off, len);  //从readBuffer中读取数据到byte数组b中
+            if (nRead > 0) { //读取到数据，立即返回
                 return nRead;
                 /*
                  * Since more bytes may have arrived since the buffer was last
@@ -1147,13 +1147,14 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                  */
             }
 
+            //没有读取到数据
             // Fill the read buffer as best we can.
-            nRead = fillReadBuffer(block);
+            nRead = fillReadBuffer(block); //读取socket的内容到readBuffer中
             updateLastRead();
 
             // Fill as much of the remaining byte array as possible with the
             // data that was just read
-            if (nRead > 0) {
+            if (nRead > 0) { //相当于在执行一次populatereadBuffer
                 socketBufferHandler.configureReadBufferForRead();
                 nRead = Math.min(nRead, len);
                 socketBufferHandler.getReadBuffer().get(b, off, nRead);
@@ -1217,7 +1218,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
 
 
         private int fillReadBuffer(boolean block) throws IOException {
-            socketBufferHandler.configureReadBufferForWrite();
+            socketBufferHandler.configureReadBufferForWrite(); //readBuffer切换成写模式
             return fillReadBuffer(block, socketBufferHandler.getReadBuffer());
         }
 
@@ -1225,10 +1226,10 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
         private int fillReadBuffer(boolean block, ByteBuffer to) throws IOException {
             int nRead;
             NioChannel channel = getSocket();
-            if (block) {
+            if (block) { //阻塞式读取
                 Selector selector = null;
                 try {
-                    selector = pool.get();
+                    selector = pool.get(); //交给NioSelectorPool去处理
                 } catch (IOException x) {
                     // Ignore
                 }
@@ -1237,14 +1238,15 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel,SocketChannel> 
                     if (socketWrapper == null) {
                         throw new IOException(sm.getString("endpoint.nio.keyMustBeCancelled"));
                     }
+                    //读取内容到to中， 这个to就是readBuffer
                     nRead = pool.read(to, channel, selector, socketWrapper.getReadTimeout());
                 } finally {
                     if (selector != null) {
                         pool.put(selector);
                     }
                 }
-            } else {
-                nRead = channel.read(to);
+            } else {// 非阻塞式读取
+                nRead = channel.read(to); //直接调用socketChannel的read方法
                 if (nRead == -1) {
                     throw new EOFException();
                 }

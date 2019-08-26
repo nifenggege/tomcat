@@ -310,15 +310,15 @@ public abstract class SocketWrapperBase<E> {
     public abstract void setAppReadBufHandler(ApplicationBufferHandler handler);
 
     protected int populateReadBuffer(byte[] b, int off, int len) {
-        socketBufferHandler.configureReadBufferForRead();
+        socketBufferHandler.configureReadBufferForRead(); //将buffer切换为读模式
         ByteBuffer readBuffer = socketBufferHandler.getReadBuffer();
-        int remaining = readBuffer.remaining();
+        int remaining = readBuffer.remaining(); //还存在的内容长度
 
         // Is there enough data in the read buffer to satisfy this request?
         // Copy what data there is in the read buffer to the byte array
         if (remaining > 0) {
             remaining = Math.min(remaining, len);
-            readBuffer.get(b, off, remaining);
+            readBuffer.get(b, off, remaining); //读数据到byte数组b中
 
             if (log.isDebugEnabled()) {
                 log.debug("Socket: [" + this + "], Read from buffer: [" + remaining + "]");

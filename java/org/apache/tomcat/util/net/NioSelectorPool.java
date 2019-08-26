@@ -27,6 +27,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 一共有三种selector
+ * 1. shared_selector 单例
+ * 2. blockingSelector， blockingSelector使用的是shared_selector， share模式下，会创建blockingSelector
+ * 3. selector 多个
  * Thread safe non blocking selector pool
  */
 public class NioSelectorPool {
@@ -38,16 +42,16 @@ public class NioSelectorPool {
 
     protected volatile Selector SHARED_SELECTOR;
 
-    protected int maxSelectors = 200;
+    protected int maxSelectors = 200;  //最多可以有maxSelectors个selector
     protected long sharedSelectorTimeout = 30000;
-    protected int maxSpareSelectors = -1;
+    protected int maxSpareSelectors = -1; //最大备用的selector个数，备用的selector会放到selectors队列中
     protected boolean enabled = true;
     protected AtomicInteger active = new AtomicInteger(0);
     protected AtomicInteger spare = new AtomicInteger(0);
     protected ConcurrentLinkedQueue<Selector> selectors =
             new ConcurrentLinkedQueue<>();
 
-    protected Selector getSharedSelector() throws IOException {
+    protected Selector getSharedSelector() throws IOException { //shared selector 就只有一个
         if (SHARED && SHARED_SELECTOR == null) {
             synchronized ( NioSelectorPool.class ) {
                 if ( SHARED_SELECTOR == null )  {
@@ -58,14 +62,15 @@ public class NioSelectorPool {
         return  SHARED_SELECTOR;
     }
 
-    public Selector get() throws IOException{
+    public Selector get() throws IOException{//首先从selectors队列中找，如果存在，则直接返回，不存在则创建
         if ( SHARED ) {
             return getSharedSelector();
         }
-        if ( (!enabled) || active.incrementAndGet() >= maxSelectors ) {
+        if ( (!enabled) || active.incrementAndGet() >= maxSelectors ) {// selector个数不能超过最大上限
             if ( enabled ) active.decrementAndGet();
             return null;
         }
+
         Selector s = null;
         try {
             s = selectors.size()>0?selectors.poll():null;
@@ -140,9 +145,15 @@ public class NioSelectorPool {
      */
     public int write(ByteBuffer buf, NioChannel socket, Selector selector,
                      long writeTimeout, boolean block) throws IOException {
-        if ( SHARED && block ) {
+        if ( SHARED && block ) {//代理给blockingSelector操作
             return blockingSelector.write(buf,socket,writeTimeout);
         }
+
+        //可能出现的情况
+        //1. shared && ！block
+        //2. !shared && block
+        //3. !shared && !block
+
         SelectionKey key = null;
         int written = 0;
         boolean timedout = false;
@@ -162,6 +173,9 @@ public class NioSelectorPool {
                     }
                     if (cnt==0 && (!block)) break; //don't block
                 }
+
+                //cnt==0 表明socket目前不可写，且block
+                //在selector上注册写事件
                 if ( selector != null ) {
                     //register OP_WRITE to the selector
                     if (key==null) key = socket.getIOChannel().register(selector, SelectionKey.OP_WRITE);
