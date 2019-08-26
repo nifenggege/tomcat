@@ -137,7 +137,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     private static final String CLASS_FILE_SUFFIX = ".class";
 
     static {
-        ClassLoader.registerAsParallelCapable();
+        ClassLoader.registerAsParallelCapable();//配置为具有并行加载能力
         JVM_THREAD_GROUP_NAMES.add(JVM_THREAD_GROUP_SYSTEM);
         JVM_THREAD_GROUP_NAMES.add("RMI Runtime");
     }
@@ -201,6 +201,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     /**
      * Construct a new ClassLoader with no defined repositories and no
      * parent ClassLoader.
+     * 初始化parent、javaseClassLoader、securityManager
      */
     protected WebappClassLoaderBase() {
 
@@ -219,7 +220,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                 j = j.getParent();
             }
         }
-        this.javaseClassLoader = j;
+        this.javaseClassLoader = j; //应该是顶级加载器
 
         securityManager = System.getSecurityManager();
         if (securityManager != null) {
@@ -245,7 +246,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         if (p == null) {
             p = getSystemClassLoader();
         }
-        this.parent = p;
+        this.parent = p; //parent并不等于传入的parent
 
         ClassLoader j = String.class.getClassLoader();
         if (j == null) {
@@ -670,7 +671,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
      * @param transformer The transformer to add to the class loader
      */
     @Override
-    public void addTransformer(ClassFileTransformer transformer) {
+    public void addTransformer(ClassFileTransformer transformer) {//可以修改字节码
 
         if (transformer == null) {
             throw new IllegalArgumentException(sm.getString(
@@ -733,6 +734,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         if (log.isDebugEnabled())
             log.debug("modified()");
 
+        //先检查resource文件是否发生变化，主要比对更改的时间
         for (Entry<String,ResourceEntry> entry : resourceEntries.entrySet()) {
             long cachedLastModified = entry.getValue().lastModified;
             long lastModified = resources.getClassLoaderResource(
@@ -751,6 +753,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         WebResource[] jars = resources.listResources("/WEB-INF/lib");
         // Filter out non-JAR resources
 
+        //比较lib下的jar是否繁盛变化
         int jarCount = 0;
         for (WebResource jar : jars) {
             if (jar.getName().endsWith(".jar") && jar.isFile() && jar.canRead()) {
@@ -823,6 +826,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
      * @param name The binary name of the class to be loaded
      *
      * @exception ClassNotFoundException if the class was not found
+     * 先从
      */
     @Override
     public Class<?> findClass(String name) throws ClassNotFoundException {
@@ -858,6 +862,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                 if (securityManager != null) {
                     PrivilegedAction<Class<?>> dp =
                         new PrivilegedFindClassByName(name);
+                    //调用findClasss获取calss对象
                     clazz = AccessController.doPrivileged(dp);
                 } else {
                     clazz = findClassInternal(name);
@@ -2296,6 +2301,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         WebResource resource = null;
 
         if (entry == null) {
+            //根据source构造Resource对象（web-inf/class/xxx/xxx/xxx.class）
             resource = resources.getClassLoaderResource(path);
 
             if (!resource.exists()) {
@@ -2328,7 +2334,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             if (clazz != null)
                 return clazz;
 
-            if (resource == null) {
+            if (resource == null) {//再找一次
                 resource = resources.getClassLoaderResource(path);
             }
 
@@ -2346,6 +2352,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             URL codeBase = resource.getCodeBase();
             Certificate[] certificates = resource.getCertificates();
 
+            //进行字节码的修改
             if (transformers.size() > 0) {
                 // If the resource is a class just being loaded, decorate it
                 // with any attached transformers
@@ -2411,6 +2418,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
 
             }
 
+            //根据字节码生成class对象
             try {
                 clazz = defineClass(name, binaryContent, 0,
                         binaryContent.length, new CodeSource(codeBase, certificates));
@@ -2427,6 +2435,12 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     }
 
 
+    /**
+     * 返回 /xxx/xxx/xxx.class
+     * @param binaryName
+     * @param withLeadingSlash
+     * @return
+     */
     private String binaryNameToPath(String binaryName, boolean withLeadingSlash) {
         // 1 for leading '/', 6 for ".class"
         StringBuilder path = new StringBuilder(7 + binaryName.length());
