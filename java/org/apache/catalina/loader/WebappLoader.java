@@ -79,7 +79,7 @@ public class WebappLoader extends LifecycleMBeanBase
      * Construct a new WebappLoader with the specified class loader
      * to be defined as the parent of the ClassLoader we ultimately create.
      *
-     * @param parent The parent class loader
+     * @param parent The parent class loader·
      */
     public WebappLoader(ClassLoader parent) {
         super();
@@ -171,13 +171,13 @@ public class WebappLoader extends LifecycleMBeanBase
             return;
         }
 
-        if (getState().isAvailable()) {
+        if (getState().isAvailable()) { //context可用状态时，是不可以更换context的
             throw new IllegalStateException(
                     sm.getString("webappLoader.setContext.ise"));
         }
 
         // Deregister from the old Context (if any)
-        if (this.context != null) {
+        if (this.context != null) { //先把this.context移除
             this.context.removePropertyChangeListener(this);
         }
 
@@ -284,12 +284,13 @@ public class WebappLoader extends LifecycleMBeanBase
      */
     @Override
     public void backgroundProcess() {
-        if (reloadable && modified()) {
+        //判断classloader#modified方法，来判断context是否放生了变化，具体实现等会再看！！！
+        if (reloadable && modified()) { //配置了reloadable，并且发生了修改
             try {
                 Thread.currentThread().setContextClassLoader
                     (WebappLoader.class.getClassLoader());
                 if (context != null) {
-                    context.reload();
+                    context.reload();  //通过context的reload方法进行热加载
                 }
             } finally {
                 if (context != null && context.getLoader() != null) {
@@ -301,7 +302,7 @@ public class WebappLoader extends LifecycleMBeanBase
     }
 
 
-    public String[] getLoaderRepositories() {
+    public String[] getLoaderRepositories() { //获取classloader所有的url
         if (classLoader == null) {
             return new String[0];
         }
@@ -313,7 +314,7 @@ public class WebappLoader extends LifecycleMBeanBase
         return result;
     }
 
-    public String getLoaderRepositoriesString() {
+    public String getLoaderRepositoriesString() {//加载目录按照：连接
         String repositories[]=getLoaderRepositories();
         StringBuilder sb=new StringBuilder();
         for( int i=0; i<repositories.length ; i++ ) {

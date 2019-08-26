@@ -5516,10 +5516,11 @@ public class StandardContext extends ContainerBase
         if (!getState().isAvailable())
             return;
 
+        //webAppLoader 周期性检查 WEB-INF/class和WEB-INF/lib目录下的文件
         Loader loader = getLoader();
         if (loader != null) {
             try {
-                loader.backgroundProcess();
+                loader.backgroundProcess(); //检查重新更新
             } catch (Exception e) {
                 log.warn(sm.getString(
                         "standardContext.backgroundProcess.loader", loader), e);
